@@ -71,3 +71,6 @@ README.md
 docs/adr/*
 docs/setup.md
 htmlcov/*
+
+plan/
+plan/plan.md
