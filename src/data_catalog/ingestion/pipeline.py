@@ -3,12 +3,14 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pandas as pd
 from rich.console import Console
 
 from data_catalog.ingestion.kaggle_client import KaggleDatasetClient
+from data_catalog.ingestion.readers import read_file
 
 console = Console()
+
+_SUPPORTED_EXTENSIONS = {".csv", ".parquet", ".plt"}
 
 
 @dataclass
@@ -16,7 +18,7 @@ class IngestionResult:
     """Outcome of a single dataset ingestion run.
 
     Attributes:
-        dataset_slug: Kaggle identifier user for the run.
+        dataset_slug: Kaggle identifier used for the run.
         destination: Local path where files were saved.
         files: List of files found after download.
         success: Whether the pipeline completed without errors.
@@ -42,10 +44,9 @@ def run_ingestion_pipeline(
             is created automatically if not provided.
 
     Returns:
-        An ``IngestionResult`` describring what was downloaded and whether
+        An ``IngestionResult`` describing what was downloaded and whether
         the pipeline succeeded.
     """
-
     resolved_client = client or KaggleDatasetClient()
     result = IngestionResult(dataset_slug=dataset_slug, destination=Path())
 
@@ -58,28 +59,18 @@ def run_ingestion_pipeline(
         result.files = files
         result.success = True
 
-        console.print(f"[green]✔ Pipeline complete. [/green] {len(files)} files(s) ready.")
+        console.print(f"[green]✔ Pipeline complete.[/green] {len(files)} file(s) ready.")
 
     except Exception as exc:  # noqa: BLE001
         result.error = str(exc)
-        console.print(
-            f"[red]✘ Pipeline failed. [/red] {exc.__class__.__name__}: {exc}"
-        )  # exc.__class__.__name__: nome da classe do erro
+        console.print(f"[red]✖ Pipeline failed:[/red] {exc.__class__.__name__}: {exc}")
 
     return result
 
 
-# constantes para arquivos PLT
-_PLT_HEADER_LINES = 6
-_PLT_COLUMNS = ["latitude", "longitude", "zero", "altitude_feet", "timestamp_days", "date", "time"]
-
-
 def _collect_data_files(directory: Path) -> list[Path]:
-    """Returns all CSV, Parquet and PLT files found recursively in ``directory``."""
-    extensions = {".csv", ".parquet", ".plt"}
-    files = [
-        f for f in directory.rglob("*") if f.suffix.lower() in extensions
-    ]  # encontra todos os arquivos com as extensões
+    """Returns all supported data files found recursively in ``directory``."""
+    files = [f for f in directory.rglob("*") if f.suffix.lower() in _SUPPORTED_EXTENSIONS]
 
     if not files:
         raise FileNotFoundError(f"No data files found in {directory}")
@@ -89,16 +80,7 @@ def _collect_data_files(directory: Path) -> list[Path]:
 
 def _validate_sample(files: list[Path]) -> None:
     """Reads the first 5 rows of the first file to confirm it is parseable."""
-    first_file = files[0]
-
     try:
-        if first_file.suffix.lower() == ".parquet":
-            pd.read_parquet(first_file).head(5)
-        elif first_file.suffix.lower() == ".plt":
-            pd.read_csv(
-                first_file, skiprows=_PLT_HEADER_LINES, header=None, names=_PLT_COLUMNS, nrows=5
-            )  # pula as primeiras 6 linhas e define o nome das colunas
-        else:
-            pd.read_csv(first_file, nrows=5)
+        read_file(files[0], nrows=5)
     except Exception as exc:
-        raise ValueError(f"Cannot read '{first_file.name}': {exc}") from exc
+        raise ValueError(f"Cannot read '{files[0].name}': {exc}") from exc
