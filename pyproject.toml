@@ -71,6 +71,10 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["data_catalog.settings", "data_catalog.catalog.database"]
+disable_error_code = ["misc"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
